@@ -1,0 +1,134 @@
+version: 2
+
+models:
+
+  # ── Fact table ──────────────────────────────────────────────────────────────
+  - name: fct_trips
+    description: >
+      Fact table — all valid, zone-enriched NYC yellow taxi trips for 2023.
+      Filtered in the intermediate layer: positive fare/distance, ≥1 passenger,
+      1–180 minute duration.  Clustered by pickup_date for Snowflake partition
+      pruning.
+    columns:
+
+      - name: trip_id
+        description: "MD5 surrogate key (pickup datetime + dropoff datetime + location IDs + fare)"
+        tests:
+          - not_null
+          - unique
+
+      - name: pickup_datetime
+        description: "Pickup timestamp"
+        tests:
+          - not_null
+
+      - name: pickup_date
+        description: "Date of pickup"
+        tests:
+          - not_null
+
+      - name: pickup_location_id
+        description: "Pickup zone location ID"
+        tests:
+          - not_null
+
+      - name: dropoff_location_id
+        description: "Dropoff zone location ID"
+        tests:
+          - not_null
+
+      - name: fare_amount
+        description: "Base meter fare (always > 0 after filtering)"
+        tests:
+          - not_null
+
+      - name: total_amount
+        description: "Total charged to passenger"
+        tests:
+          - not_null
+
+      - name: trip_duration_minutes
+        description: "Trip duration in minutes (guaranteed 1–180)"
+        tests:
+          - not_null
+          - column_in_range:
+              arguments:
+                min_value: 1
+                max_value: 180
+
+  # ── Dimension table ─────────────────────────────────────────────────────────
+  - name: dim_zones
+    description: "NYC TLC taxi zones — 265 zones mapped to borough and service zone."
+    columns:
+
+      - name: location_id
+        description: "Primary key — TLC zone location ID"
+        tests:
+          - not_null
+          - unique
+
+      - name: borough
+        description: "NYC borough"
+        tests:
+          - not_null
+
+      - name: zone_name
+        description: "Zone name"
+        tests:
+          - not_null
+
+  # ── Daily revenue aggregate ─────────────────────────────────────────────────
+  - name: agg_daily_revenue
+    description: >
+      Daily revenue aggregation — one row per calendar day.  Includes trip
+      counts, total/avg fares, total tips, total revenue, and tip rate.
+    columns:
+
+      - name: pickup_date
+        description: "Calendar date (primary key)"
+        tests:
+          - not_null
+          - unique
+
+      - name: total_trips
+        description: "Number of valid trips that day"
+        tests:
+          - not_null
+
+      - name: total_revenue
+        description: "Sum of total_amount for that day"
+        tests:
+          - not_null
+
+  # ── Zone performance aggregate ──────────────────────────────────────────────
+  - name: agg_zone_performance
+    description: >
+      Per pickup-zone, per-month performance: trip counts, average fares,
+      average distances, monthly revenue, within-month revenue rank, and
+      a high-demand flag (>10k trips/month).
+    columns:
+
+      - name: pickup_location_id
+        description: "Zone location ID (composite PK with pickup_year + pickup_month)"
+        tests:
+          - not_null
+
+      - name: pickup_year
+        description: "Year of measurement"
+        tests:
+          - not_null
+
+      - name: pickup_month
+        description: "Month of measurement"
+        tests:
+          - not_null
+
+      - name: monthly_revenue
+        description: "Total revenue for this zone in this month"
+        tests:
+          - not_null
+
+      - name: revenue_rank_in_month
+        description: "Revenue rank of this zone within the calendar month (1 = highest)"
+        tests:
+          - not_null

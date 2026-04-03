@@ -1,0 +1,47 @@
+version: 2
+
+sources:
+  - name: nyc_tlc
+    description: >
+      NYC Taxi and Limousine Commission (TLC) Yellow Taxi trip records.
+      Raw Parquet files are read directly by DuckDB via the external_location
+      meta property below.
+    database: nyc_taxi
+    schema:   main
+
+    # ── Freshness check ───────────────────────────────────────────────────────
+    freshness:
+      warn_after:  { count: 3, period: day }
+      error_after: { count: 7, period: day }
+
+    loaded_at_field: tpep_pickup_datetime
+
+    tables:
+      - name: yellow_tripdata
+        description: >
+          Yellow taxi trip records for 2023 (12 monthly Parquet files, ~38M rows).
+          DuckDB reads these directly via read_parquet() using the external_location below.
+        meta:
+          external_location: "read_parquet('{{ env_var('PARQUET_DIR', '../data') }}/yellow_tripdata_2023-*.parquet')"
+
+        columns:
+          - name: tpep_pickup_datetime
+            description: "Passenger pickup timestamp"
+          - name: tpep_dropoff_datetime
+            description: "Passenger dropoff timestamp"
+          - name: passenger_count
+            description: "Number of passengers (NULL for some vendor-recorded trips)"
+          - name: trip_distance
+            description: "Trip distance in miles as reported by the taximeter"
+          - name: PULocationID
+            description: "TLC Taxi Zone pickup location ID"
+          - name: DOLocationID
+            description: "TLC Taxi Zone dropoff location ID"
+          - name: payment_type
+            description: "1=Credit card, 2=Cash, 3=No charge, 4=Dispute, 5=Unknown"
+          - name: fare_amount
+            description: "Time-and-distance fare calculated by the meter"
+          - name: tip_amount
+            description: "Tip — auto-populated for credit card trips; cash tips not included"
+          - name: total_amount
+            description: "Total charged to the passenger (fare + surcharges + tips)"

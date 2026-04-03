@@ -1,0 +1,15 @@
+# profiles.yml.example
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy this file to profiles.yml (same directory) and fill in the path.
+# NEVER commit profiles.yml to version control — it is in .gitignore.
+# ─────────────────────────────────────────────────────────────────────────────
+
+nyc_taxi:
+  target: dev
+
+  outputs:
+
+    dev:
+      type:    duckdb
+      path:    nyc_taxi.duckdb   # DuckDB file created automatically on first run
+      threads: 4

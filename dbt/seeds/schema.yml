@@ -1,0 +1,33 @@
+version: 2
+
+seeds:
+
+  - name: taxi_zone_lookup
+    description: >
+      NYC TLC taxi zone lookup table.  265 zones, each mapped to a
+      LocationID, borough, zone name, and service zone type.
+      Source: https://d37ci6vzurychx.cloudfront.net/misc/taxi_zone_lookup.csv
+      The seed CSV was populated from the official TLC download.
+      Run `scripts/download_data.sh` to refresh it with the canonical file.
+    columns:
+
+      - name: LocationID
+        description: "TLC zone identifier (1–265)"
+        tests:
+          - not_null
+          - unique
+
+      - name: Borough
+        description: "NYC borough (Manhattan, Brooklyn, Queens, Bronx, Staten Island, EWR)"
+        tests:
+          - not_null
+
+      - name: Zone
+        description: "Human-readable zone name"
+        tests:
+          - not_null
+
+      - name: service_zone
+        description: "Service zone type (Yellow Zone, Boro Zone, Airports, EWR, N/A)"
+        tests:
+          - not_null

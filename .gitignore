@@ -1,0 +1,55 @@
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+*.egg
+.python-version
+
+# ── DBT ───────────────────────────────────────────────────────────────────────
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/profiles.yml            # NEVER commit — contains credentials
+
+# ── DuckDB database files ─────────────────────────────────────────────────────
+*.duckdb
+*.duckdb.wal
+
+# ── Data files — too large to commit (~3–4 GB for 2023, ~15 GB for full history)
+data/
+*.parquet
+
+# Exception: seed CSVs are small and intentionally committed
+!dbt/seeds/*.csv
+
+# ── Airflow ───────────────────────────────────────────────────────────────────
+airflow/
+airflow.db
+airflow.cfg
+standalone_admin_password.txt
+logs/
+plugins/
+webserver_config.py
+pipeline_run.log
+
+# ── Environment & secrets ──────────────────────────────────────────────────────
+.env
+.env.*
+*.pem
+*.key
+secrets/
+
+# ── OS / IDE ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo

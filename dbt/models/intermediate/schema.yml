@@ -1,0 +1,33 @@
+version: 2
+
+models:
+
+  - name: int_trips_enriched
+    description: >
+      Filtered and zone-enriched trips.  Removes invalid records (zero distance,
+      zero fare, zero passengers, sub-1-minute or over-3-hour durations, and
+      trips outside calendar year 2023).  Joins pickup and dropoff location IDs
+      to human-readable zone names from the zone dimension.
+    columns:
+
+      - name: trip_id
+        description: "Surrogate key — inherited from stg_yellow_trips"
+        tests:
+          - not_null
+          - unique
+
+      - name: pickup_datetime
+        description: "Pickup timestamp (filtered: 2023 only)"
+        tests:
+          - not_null
+
+      - name: trip_duration_minutes
+        description: "Trip duration in minutes (filtered: 1–180)"
+        tests:
+          - not_null
+
+      - name: pickup_zone
+        description: "Human-readable pickup zone name (NULL if zone not in lookup)"
+
+      - name: dropoff_zone
+        description: "Human-readable dropoff zone name (NULL if zone not in lookup)"

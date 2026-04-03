@@ -1,0 +1,5 @@
+# No external dbt packages are required.
+# The generate_surrogate_key and test_column_in_range utilities are
+# implemented as local macros (macros/) to keep dependencies minimal.
+
+packages: []
