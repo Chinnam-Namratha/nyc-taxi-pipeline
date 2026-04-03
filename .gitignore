@@ -16,6 +16,7 @@ dbt/target/
 dbt/dbt_packages/
 dbt/logs/
 dbt/profiles.yml            # NEVER commit — contains credentials
+dbt/.user.yml               # dbt telemetry ID — machine-specific
 
 # ── DuckDB database files ─────────────────────────────────────────────────────
 *.duckdb
