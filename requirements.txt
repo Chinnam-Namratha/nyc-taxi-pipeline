@@ -15,3 +15,7 @@ pyspark>=3.5,<4.0
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv>=1.0            # load .env files for local development
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=8.0
+pytest-mock>=3.12

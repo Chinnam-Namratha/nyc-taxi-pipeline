@@ -20,7 +20,10 @@ I used DuckDB instead of Snowflake — it reads Parquet files natively, runs ent
 │   ├── dbt_project.yml
 │   └── profiles.yml.example
 ├── dags/
-│   └── nyc_taxi_daily_pipeline.py
+│   ├── nyc_taxi_daily_pipeline.py
+│   └── constants.py              all tuneable values and env-var defaults in one place
+├── tests/
+│   └── test_pipeline.py          hermetic unit tests for every pipeline task
 ├── queries/
 │   ├── q1_top_zones_by_revenue.sql
 │   ├── q2_hour_of_day_pattern.sql
@@ -96,7 +99,15 @@ python dags/nyc_taxi_daily_pipeline.py 2023-01-01
 
 This runs all six tasks in order: freshness check -> seed -> staging -> intermediate -> marts -> tests -> notify. Pass any 2023 date to process that month's data.
 
-### 6. Run the SQL queries
+### 6. Run the unit tests
+
+```powershell
+pytest tests/test_pipeline.py -v
+```
+
+All tests are hermetic — no filesystem, subprocess, or DuckDB calls are made without mocking. Tests cover `_dbt_cmd`, `_run_shell`, `check_source_freshness`, all dbt task functions, and `notify_success`.
+
+### 7. Run the SQL queries
 
 ```bash
 duckdb data/nyc_taxi.duckdb < queries/q1_top_zones_by_revenue.sql
@@ -104,7 +115,7 @@ duckdb data/nyc_taxi.duckdb < queries/q2_hour_of_day_pattern.sql
 duckdb data/nyc_taxi.duckdb < queries/q3_consecutive_gap_analysis.sql
 ```
 
-### 7. PySpark historical processing (bonus)
+### 8. PySpark historical processing (bonus)
 
 ```bash
 spark-submit spark/process_historical.py \
@@ -177,3 +188,33 @@ I used GitHub Copilot (Claude Sonnet) throughout this. Honestly it was less abou
 Specific things it helped with: getting the dbt macro syntax right for DuckDB, the Airflow DAG backfill semantics with `data_interval_start`, and the window function patterns in the SQL queries.
 
 I reviewed everything it produced and caught real issues along the way — the seed not being included in the DAG pipeline (which caused an actual failure when I ran it), hardcoded venv paths in the dbt commands, and the Airflow 3.x import crash on Windows that needed the `if __name__ != "__main__"` guard to fix.
+
+**`constants.py` was my own addition.** The original pipeline scattered all configuration — paths, timeouts, DAG settings, dbt selectors — directly as `os.getenv()` calls and inline strings throughout `nyc_taxi_daily_pipeline.py`. Copilot never flagged this. I added `dags/constants.py` myself because:
+
+- A single place to change a value (e.g. `SHELL_TIMEOUT_SECONDS`, `SOURCE_STALENESS_WARN_DAYS`) without hunting through the pipeline file.
+- Environment-variable defaults are explicit and documented rather than buried in function bodies.
+- It makes the pipeline easier to extend — adding a new env var or threshold is a one-line change in one file.
+
+**`tests/test_pipeline.py` was also my addition ** The pipeline had no tests at all. I wrote hermetic unit tests covering every task function so the logic can be verified without needing Airflow, dbt, or DuckDB installed. The tests mock all external calls (`subprocess.run`, `duckdb.connect`, filesystem) so they run instantly in any CI environment.
+
+What is covered:
+
+| Test class | What it tests |
+|---|---|
+| `TestDbtCmd` | `_dbt_cmd` builds the correct shell string for each layer and respects env var overrides |
+| `TestRunShell` | `_run_shell` raises `RuntimeError` on non-zero exit, passes timeout to subprocess |
+| `TestCheckSourceFreshness` | file-exists pass, file-missing fail, correct filename derived from date, staleness warning |
+| `TestDbtTaskFunctions` | each dbt layer function calls the right `--select` selector |
+| `TestRunDbtTests` | calls `dbt test`, propagates failures |
+| `TestNotifySuccess` | logs trip count + revenue, warns on no rows, non-fatal on DuckDB error |
+
+How to run:
+
+```powershell
+# activate venv first
+& dbt\.venv\Scripts\Activate.ps1
+
+pytest tests/test_pipeline.py -v
+```
+
+All 16 tests should pass in under a second with no external dependencies.

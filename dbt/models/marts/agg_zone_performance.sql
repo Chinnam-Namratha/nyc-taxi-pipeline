@@ -10,7 +10,7 @@
   ────────────────────
   Per-zone, per-month performance metrics with a revenue rank.
 
-  On the revenue rank question — I went with ranking within each month rather
+  On the revenue rank question (Brain Storming) — I went with ranking within each month rather
   than a global rank across the whole year. A global rank is basically useless
   here because Manhattan zones dominate every single month without exception.
   You'd look at it and see Midtown at #1 in January, #1 in February, #1 in

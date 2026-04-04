@@ -38,6 +38,28 @@ import os
 import subprocess
 from datetime import datetime, timedelta
 
+from constants import (
+    AGG_DAILY_REVENUE_TABLE,
+    ALERT_EMAIL_RAW,
+    DAG_ID,
+    DAG_MAX_ACTIVE_RUNS,
+    DAG_OWNER,
+    DAG_SCHEDULE,
+    DAG_TAGS,
+    DBT_PROJECT_DIR,
+    DBT_SELECT_INTERMEDIATE,
+    DBT_SELECT_MARTS,
+    DBT_SELECT_STAGING,
+    DBT_TARGET,
+    DUCKDB_PATH,
+    PARQUET_DIR,
+    PARQUET_FILE_PATTERN,
+    SHELL_TIMEOUT_SECONDS,
+    SOURCE_STALENESS_WARN_DAYS,
+    TASK_RETRIES,
+    TASK_RETRY_DELAY,
+)
+
 if __name__ != "__main__":
     from airflow import DAG
     from airflow.providers.standard.operators.python import PythonOperator
@@ -49,18 +71,18 @@ log = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 _ALERT_EMAILS = [
     addr.strip()
-    for addr in os.getenv("ALERT_EMAIL", "").split(",")
+    for addr in ALERT_EMAIL_RAW.split(",")
     if addr.strip()
 ]
 
 DEFAULT_ARGS = {
-    "owner":            "data-engineering",
+    "owner":            DAG_OWNER,
     "depends_on_past":  False,
     "email":            _ALERT_EMAILS,
     "email_on_failure": True,
     "email_on_retry":   False,
-    "retries":          2,
-    "retry_delay":      timedelta(minutes=5),
+    "retries":          TASK_RETRIES,
+    "retry_delay":      TASK_RETRY_DELAY,
 }
 
 
@@ -75,7 +97,7 @@ def _run_shell(cmd: str) -> None:
         shell=True,
         capture_output=True,
         text=True,
-        timeout=3600,  # 1-hour hard limit per dbt run
+        timeout=SHELL_TIMEOUT_SECONDS,
     )
     if result.stdout:
         log.info("STDOUT:\n%s", result.stdout)
@@ -88,11 +110,9 @@ def _run_shell(cmd: str) -> None:
 
 def _dbt_cmd(select: str) -> str:
     """Build a dbt run command for the given node selector."""
-    dbt_dir    = os.getenv("DBT_PROJECT_DIR", os.path.join(os.path.dirname(__file__), "..", "dbt"))
-    dbt_target = os.getenv("DBT_TARGET", "dev")
     return (
-        f"cd {dbt_dir} && "
-        f"dbt run --select {select} --target {dbt_target} --no-partial-parse"
+        f"cd {DBT_PROJECT_DIR} && "
+        f"dbt run --select {select} --target {DBT_TARGET} --no-partial-parse"
     )
 
 
@@ -118,12 +138,10 @@ def check_source_freshness(**context) -> None:
         AirflowException = RuntimeError  # type: ignore[misc,assignment]
 
     execution_date: datetime = context["data_interval_start"]
-    parquet_dir = os.getenv("PARQUET_DIR", os.path.join(os.path.dirname(__file__), "..", "data"))
-
     year  = execution_date.year
     month = execution_date.month
     expected_file = os.path.join(
-        parquet_dir, f"yellow_tripdata_{year}-{month:02d}.parquet"
+        PARQUET_DIR, PARQUET_FILE_PATTERN.format(year=year, month=month)
     )
 
     log.info("Checking source file: %s", expected_file)
@@ -137,7 +155,7 @@ def check_source_freshness(**context) -> None:
         datetime.now().timestamp() - os.path.getmtime(expected_file)
     ) / 86400
 
-    if file_age_days > 35:
+    if file_age_days > SOURCE_STALENESS_WARN_DAYS:
         # Warn but don't fail — monthly files are refreshed once a month.
         log.warning(
             "Source file %s is %.1f days old — ensure it is the current month's data.",
@@ -153,24 +171,22 @@ def check_source_freshness(**context) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 def run_dbt_seed(**context) -> None:
     """Load seed files (taxi_zone_lookup) into DuckDB."""
-    dbt_dir    = os.getenv("DBT_PROJECT_DIR", os.path.join(os.path.dirname(__file__), "..", "dbt"))
-    dbt_target = os.getenv("DBT_TARGET", "dev")
-    _run_shell(f"cd {dbt_dir} && dbt seed --target {dbt_target} --no-partial-parse")
+    _run_shell(f"cd {DBT_PROJECT_DIR} && dbt seed --target {DBT_TARGET} --no-partial-parse")
 
 
 def run_dbt_staging(**context) -> None:
     """Run dbt staging models."""
-    _run_shell(_dbt_cmd("staging"))
+    _run_shell(_dbt_cmd(DBT_SELECT_STAGING))
 
 
 def run_dbt_intermediate(**context) -> None:
     """Run dbt intermediate models."""
-    _run_shell(_dbt_cmd("intermediate"))
+    _run_shell(_dbt_cmd(DBT_SELECT_INTERMEDIATE))
 
 
 def run_dbt_marts(**context) -> None:
     """Run dbt mart models."""
-    _run_shell(_dbt_cmd("marts"))
+    _run_shell(_dbt_cmd(DBT_SELECT_MARTS))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -187,11 +203,9 @@ def run_dbt_tests(**context) -> None:
       should be renamed to a staging schema during the run and atomically
       swapped only after run_dbt_tests succeeds.  See README for full details.
     """
-    dbt_dir    = os.getenv("DBT_PROJECT_DIR", os.path.join(os.path.dirname(__file__), "..", "dbt"))
-    dbt_target = os.getenv("DBT_TARGET", "dev")
     _run_shell(
-        f"cd {dbt_dir} && "
-        f"dbt test --target {dbt_target} --no-partial-parse"
+        f"cd {DBT_PROJECT_DIR} && "
+        f"dbt test --target {DBT_TARGET} --no-partial-parse"
     )
 
 
@@ -206,16 +220,14 @@ def notify_success(**context) -> None:
     execution_date: datetime = context["data_interval_start"]
     run_date = execution_date.date()
 
-    db_path = os.getenv("DUCKDB_PATH", os.path.join(os.path.dirname(__file__), "..", "data", "nyc_taxi.duckdb"))
-
     try:
         import duckdb
 
-        conn = duckdb.connect(db_path, read_only=True)
+        conn = duckdb.connect(DUCKDB_PATH, read_only=True)
         row = conn.execute(
-            """
+            f"""
             SELECT total_trips, total_revenue
-            FROM   main_marts.agg_daily_revenue
+            FROM   {AGG_DAILY_REVENUE_TABLE}
             WHERE  pickup_date = ?
             """,
             [str(run_date)],
@@ -247,17 +259,17 @@ def notify_success(**context) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 if __name__ != "__main__":
     with DAG(
-        dag_id="nyc_taxi_daily_pipeline",
+        dag_id=DAG_ID,
         description=(
             "NYC Yellow Taxi daily ELT: source freshness check → "
             "dbt staging → intermediate → marts → tests → notify"
         ),
         default_args=DEFAULT_ARGS,
-        schedule="0 2 * * *",             # 02:00 UTC daily
+        schedule=DAG_SCHEDULE,
         start_date=datetime(2023, 1, 1),
         catchup=True,                    # enables backfill from start_date
-        max_active_runs=3,               # allow limited parallel backfill
-        tags=["nyc-taxi", "dbt", "daily"],
+        max_active_runs=DAG_MAX_ACTIVE_RUNS,
+        tags=DAG_TAGS,
         doc_md=__doc__,
     ) as dag:
 

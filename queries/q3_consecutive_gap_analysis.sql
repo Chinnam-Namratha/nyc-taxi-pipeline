@@ -44,7 +44,6 @@ WITH trips_ordered AS (
         dropoff_datetime,
 
         -- Next trip's pickup time within the same zone on the same calendar day.
-        -- LEAD() is evaluated after the window ORDER BY: pickup_datetime ASC.
         LEAD(pickup_datetime) OVER (
             PARTITION BY DATE(pickup_datetime), pickup_location_id
             ORDER BY     pickup_datetime

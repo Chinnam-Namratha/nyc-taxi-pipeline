@@ -4,8 +4,7 @@
   For each hour of the day (0–23):
     • total_trips             — total trip count across all 2023 data
     • avg_fare                — average base fare
-    • avg_tip_pct             — average tip as % of fare (credit-card trips only;
-                                cash-trip tips are not recorded in the TLC data)
+    • avg_tip_pct             — average tip as % of fare 
     • rolling_3h_avg_trips    — centred 3-hour rolling average of trip count
                                 (1 hour before + current + 1 hour after)
 
